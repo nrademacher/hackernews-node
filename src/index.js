@@ -1,54 +1,39 @@
+const { PrismaClient } = require('@prisma/client');
 const { ApolloServer } = require('apollo-server');
 const fs = require('fs');
 const path = require('path');
+const { getUserId } = require('./utils');
+const Query = require('./resolvers/Query');
+const Mutation = require('./resolvers/Mutation');
+const User = require('./resolvers/User');
+const Link = require('./resolvers/Link');
+const Vote = require('./resolvers/Vote');
+const Subscription = require('./resolvers/Subscription');
+const { PubSub } = require('apollo-server');
 
-// dummy data
-let links = [
-  {
-    id: 'link-0',
-    url:
-      'https://aaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com/',
-    description: 'A URL Lengthener',
-  },
-];
+const pubsub = new PubSub();
+const prisma = new PrismaClient();
 
-let idCount = links.length;
 const resolvers = {
-  Query: {
-    info: () => `This is the API of a Hackernews clone`,
-    feed: () => links,
-    link: (parent, args) => links.find((links) => links.id === args.id),
-  },
-  Mutation: {
-    post: (parent, args) => {
-      const link = {
-        id: `link-${(idCount += 1)}`,
-        description: args.description,
-        url: args.url,
-      };
-      links.push(link);
-      return link;
-    },
-    updateLink: (parent, args) => {
-      const linkIdx = links.indexOf(links.find((link) => link.id === args.id));
-      links[linkIdx] = {
-        id: links[linkIdx].id,
-        description: args.description || links[linkIdx].description,
-        url: args.url || links[linkIdx].url,
-      };
-      return links[linkIdx];
-    },
-    deleteLink: (parent, args) => {
-      const link = links.find((links) => links.id === args.id);
-      links = links.filter((links) => links.id !== args.id);
-      return link;
-    },
-  },
+  Query,
+  Mutation,
+  Subscription,
+  User,
+  Link,
+  Vote
 };
 
 const server = new ApolloServer({
   typeDefs: fs.readFileSync(path.join(__dirname, 'schema.graphql'), 'utf8'),
   resolvers,
+  context: ({ req }) => {
+    return {
+      ...req,
+      prisma,
+      pubsub,
+      userId: req && req.headers.authorization ? getUserId(req) : null,
+    };
+  },
 });
 
 server.listen().then(({ url }) => console.log(`Server is running on ${url}`));
